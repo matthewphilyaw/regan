@@ -19,10 +19,10 @@ namespace regan {
         void draw();
 
     private:
-        Engine &engine;
-        Rectangle play_btn;
-        Rectangle editor_btn;
-        Rectangle quit_btn;
+        Engine &engine_;
+        Rectangle play_btn_;
+        Rectangle editor_btn_;
+        Rectangle quit_btn_;
         // Button helper
         bool button(const char* label, Rectangle rect);
     };

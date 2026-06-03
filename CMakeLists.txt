@@ -65,6 +65,10 @@ add_executable(regan
         src/engine/engine.hpp
         src/menu/menu.cpp
         src/menu/menu.hpp
+        src/editor/registry.hpp
+        src/editor/entity.hpp
+        src/common/managed_model.hpp
+        src/common/managed_texture_2d.hpp
 )
 
 target_include_directories(regan PRIVATE

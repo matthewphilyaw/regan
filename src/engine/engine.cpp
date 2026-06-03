@@ -9,37 +9,37 @@
 
 void regan::Engine::run() {
     while (!WindowShouldClose()) {
-        if (this->new_engine_state != this->engine_state) {
-            this->transition_to_state(this->new_engine_state);
+        if (new_engine_state_ != engine_state_) {
+            transition_to_state(new_engine_state_);
             continue;
         }
 
-        if (this->engine_state == EngineState::None) {
+        if (engine_state_ == EngineState::None) {
             continue;
         }
 
-        switch (engine_state) {
-            case MainMenuState:
-                this->menu->update();
+        switch (engine_state_) {
+            case EngineState::MainMenu:
+                menu_->update();
                 break;
-            case EditorState:
-                this->editor->update();
+            case EngineState::Editor:
+                editor_->update();
                 break;
-            case ExitState:
+            case EngineState::Exit:
                 return;
             default:
                 break;
         }
 
         BeginDrawing();
-        switch (engine_state) {
-            case MainMenuState:
-                this->menu->draw();
+        switch (engine_state_) {
+            case EngineState::MainMenu:
+                menu_->draw();
                 break;
-            case EditorState:
-                this->editor->draw();
+            case EngineState::Editor:
+                editor_->draw();
                 break;
-            case ExitState:
+            case EngineState::Exit:
                 return;
             default:
                 break;
@@ -49,21 +49,21 @@ void regan::Engine::run() {
 }
 
 void regan::Engine::request_transition_to_state(EngineState new_state) {
-    this->new_engine_state = new_state;
+    new_engine_state_ = new_state;
 }
 
 void regan::Engine::transition_to_state(EngineState new_state) {
-    this->engine_state = new_state;
+    engine_state_ = new_state;
 
-    this->editor.reset();
-    this->menu.reset();
+    editor_.reset();
+    menu_.reset();
 
-    switch (engine_state) {
-        case MainMenuState:
-            this->menu = std::make_unique<Menu>(*this);
+    switch (engine_state_) {
+        case EngineState::MainMenu:
+            menu_ = std::make_unique<Menu>(*this);
             break;
-        case EditorState:
-            this->editor = std::make_unique<Editor>(*this);
+        case EngineState::Editor:
+            editor_ = std::make_unique<editor::Editor>(*this);
             break;
         default:
             break;

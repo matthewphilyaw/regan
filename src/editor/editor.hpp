@@ -6,9 +6,13 @@
 #include "rlImGui.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
+#include "registry.hpp"
 
 namespace regan {
     class Engine;
+}
+
+namespace regan::editor {
     constexpr const char* ASSET_PATH = "/Users/mphilyaw/code/regan/assets";
 
     enum NodeType {
@@ -43,8 +47,11 @@ namespace regan {
 
     class Editor {
     public:
-        explicit Editor(Engine &engine);
+        explicit Editor(regan::Engine &engine);
         void update();
+
+        void draw_selection_highlight();
+
         void draw();
         ~Editor();
 
@@ -57,18 +64,24 @@ namespace regan {
         void lock_cursor();
         void unlock_cursor();
 
-        Engine &engine;
-        Camera3D camera_3d{};
-        EditorCamera editor_camera{};
-        Vector2 saved_cursor_pos{};
+        void update_selection();
 
-        std::vector<SceneNode> scene_node_list{};
-        std::vector<ObjNode> obj_nodes{};
-        std::vector<Model> models{};
-        std::vector<Texture2D> textures{};
+        void draw_gizmo();
+        void draw_grid();
+        void draw_nodes();
 
-        std::optional<size_t> selected{};
-        bool cursor_locked = false;
-        ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
+        Engine &engine_;
+        Camera3D camera_3d_{};
+        EditorCamera editor_camera_{};
+        Vector2 saved_cursor_pos_{};
+
+        std::vector<SceneNode> scene_node_list_{};
+        Registry<ObjNode> obj_nodes_{};
+        Registry<Model> models_{};
+        Registry<Texture2D> textures_{};
+
+        std::optional<size_t> selected_{};
+        bool cursor_locked_ = false;
+        ImGuizmo::OPERATION operation_ = ImGuizmo::TRANSLATE;
     };
 }

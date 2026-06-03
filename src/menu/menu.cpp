@@ -7,15 +7,15 @@
 #include "engine/engine.hpp"
 
 namespace regan {
-    Menu::Menu(Engine &engine) : engine(engine) {
+    Menu::Menu(Engine &engine) : engine_(engine) {
         EnableCursor();
 
         float cx = GetScreenWidth() * 0.5f;
         float cy = GetScreenHeight() * 0.5f;
 
-        this->play_btn = {cx - 100, cy - 30, 200, 40};
-        this->editor_btn = {cx - 100, cy + 30, 200, 40};
-        this->quit_btn = {cx - 100, cy + 90, 200, 40};
+        play_btn_ = {cx - 100, cy - 30, 200, 40};
+        editor_btn_ = {cx - 100, cy + 30, 200, 40};
+        quit_btn_ = {cx - 100, cy + 90, 200, 40};
 
         SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
     }
@@ -50,14 +50,14 @@ namespace regan {
         bool click = IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
 
         if (click) {
-            if (CheckCollisionPointRec(mouse, this->play_btn)) {
-                this->engine.request_transition_to_state(EngineState::MainMenuState);
+            if (CheckCollisionPointRec(mouse, play_btn_)) {
+                engine_.request_transition_to_state(EngineState::MainMenu);
             }
-            if (CheckCollisionPointRec(mouse, this->editor_btn)) {
-                this->engine.request_transition_to_state(EngineState::EditorState);
+            if (CheckCollisionPointRec(mouse, editor_btn_)) {
+                engine_.request_transition_to_state(EngineState::Editor);
             }
-            if (CheckCollisionPointRec(mouse, this->quit_btn)) {
-                this->engine.request_transition_to_state(EngineState::ExitState);
+            if (CheckCollisionPointRec(mouse, quit_btn_)) {
+                engine_.request_transition_to_state(EngineState::Exit);
             }
         }
 
@@ -78,8 +78,8 @@ namespace regan {
                  static_cast<int>(cy - 120),
                  titleSize, WHITE);
 
-        button("PLAY", this->play_btn);
-        button("EDITOR", this->editor_btn);
-        button("QUIT", this->quit_btn);
+        button("PLAY", play_btn_);
+        button("EDITOR", editor_btn_);
+        button("QUIT", quit_btn_);
     }
 } // namespace regan

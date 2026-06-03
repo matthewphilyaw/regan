@@ -8,11 +8,11 @@ namespace regan {
     class Menu;
     class Editor;
 
-    enum EngineState {
+    enum class EngineState {
         None,
-        MainMenuState,
-        EditorState,
-        ExitState
+        MainMenu,
+        Editor,
+        Exit
     };
 
     class Engine {
@@ -23,10 +23,10 @@ namespace regan {
         private:
             void transition_to_state(EngineState engine_state);
 
-            EngineState engine_state = None;
-            EngineState new_engine_state = None;
+            EngineState engine_state_ = EngineState::None;
+            EngineState new_engine_state_ = EngineState::None;
 
-            std::unique_ptr<Menu> menu;
-            std::unique_ptr<Editor> editor;
+            std::unique_ptr<Menu> menu_;
+            std::unique_ptr<editor::Editor> editor_;
     };
 }

@@ -10,7 +10,7 @@ int main() {
 
     {
         regan::Engine engine;
-        engine.request_transition_to_state(regan::MainMenuState);
+        engine.request_transition_to_state(regan::EngineState::MainMenu);
         engine.run();
     }
 
