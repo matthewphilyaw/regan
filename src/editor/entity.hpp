@@ -5,10 +5,16 @@
 #pragma once
 
 #include <string>
+#include <optional>
 #include "raylib.h"
 #include "raymath.h"
 
 namespace regan::editor {
+    struct EntityMesh {
+        std::optional<size_t> model_id{};
+        std::optional<size_t> texture_id{};
+    };
+
     struct EntityTransform {
         Vector3 position{};
         Vector3 euler_degrees{};
@@ -17,9 +23,8 @@ namespace regan::editor {
     };
 
     struct Entity {
-        size_t id;
         std::string name;
         EntityTransform transform{};
-
+        std::optional<EntityMesh> mesh{};
     };
 }

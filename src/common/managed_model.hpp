@@ -8,7 +8,8 @@
 namespace regan::common {
     class ManagedModel {
     public:
-        explicit ManagedModel(Model model): model_(model) {}
+        ManagedModel() = default;
+        explicit ManagedModel(const Model &model): model_(model) {}
         ~ManagedModel() { UnloadModel(model_); }
 
         ManagedModel(const ManagedModel&) = delete;
@@ -29,6 +30,12 @@ namespace regan::common {
 
         Model& get() { return model_; }
         [[nodiscard]] const Model& get() const { return model_; }
+
+        static ManagedModel take(Model& model) {
+            auto m = ManagedModel(model);
+            model = {};
+            return m;
+        }
 
     private:
         Model model_;

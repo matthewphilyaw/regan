@@ -3,21 +3,21 @@
 //
 
 #pragma once
-#include <unordered_map>
+#include <map>
 
 namespace regan::editor {
     template<typename T>
     class Registry {
     public:
         size_t add(T item) {
-            auto id = ++this->last_id;
-            this->registry[id] = std::move(item);
+            auto id = ++last_id_;
+            this->registry_[id] = std::move(item);
             return id;
         }
 
         T* get(size_t id) {
-            auto it = this->registry.find(id);
-            if (it == this->registry.end()) {
+            auto it = registry_.find(id);
+            if (it == registry_.end()) {
                 return nullptr;
             }
 
@@ -25,14 +25,22 @@ namespace regan::editor {
         }
 
         void remove(size_t id) {
-            this->registry.erase(id);
+            registry_.erase(id);
         }
 
-        auto begin() const { return registry.begin(); }
-        auto end()   const { return registry.end(); }
+        size_t size() {
+            return registry_.size();
+        }
+
+        bool empty() {
+            return registry_.empty();
+        }
+
+        auto begin() const { return registry_.begin(); }
+        auto end()   const { return registry_.end(); }
 
     private:
-        size_t last_id{};
-        std::unordered_map<size_t, T> registry{};
+        size_t last_id_{};
+        std::map<size_t, T> registry_{};
     };
 }

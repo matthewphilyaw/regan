@@ -13,6 +13,8 @@
 #include <ranges>
 
 #include "rlgl.h"
+#include "common/managed_model.hpp"
+#include "common/managed_texture_2d.hpp"
 
 namespace fs = std::filesystem;
 
@@ -29,13 +31,13 @@ namespace regan::editor {
         };
     }
 
-    static Matrix node_transform(const ObjNode& n) {
+    static Matrix entity_transform_matrix(const EntityTransform& t) {
         return MatrixMultiply(
             MatrixMultiply(
-                MatrixScale(n.scale.x, n.scale.y, n.scale.z),
-                QuaternionToMatrix(n.rotation)
+                MatrixScale(t.scale.x, t.scale.y, t.scale.z),
+                QuaternionToMatrix(t.rotation)
             ),
-            MatrixTranslate(n.position.x, n.position.y, n.position.z)
+            MatrixTranslate(t.position.x, t.position.y, t.position.z)
         );
     }
 
@@ -57,43 +59,46 @@ namespace regan::editor {
         rlImGuiSetup(true);
         editor_camera_.update_camera_position(camera_3d_);
 
-        auto model_id = models_.add(LoadModel((asset_path / "kit" / "sm_ok_x3_wm_s.glb").string().c_str()));
-        auto texture_id = textures_.add(LoadTexture((asset_path / "textures" / "office_kit.png").string().c_str()));
+        auto model_id = models_.add(common::ManagedModel(LoadModel((asset_path / "kit" / "sm_ok_x3_wm_s.glb").string().c_str())));
+        auto texture_id = textures_.add(
+            common::ManagedTexture2d(
+                LoadTexture((asset_path / "textures" / "office_kit.png").string().c_str())
+            )
+        );
 
-        SetTextureFilter(*textures_.get(texture_id), RL_TEXTURE_FILTER_POINT);
-        models_.get(model_id)->materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = *textures_.get(texture_id);
+        auto* managed_model = models_.get(model_id);
+        auto& model = managed_model->get();
 
-        auto obj_id = obj_nodes_.add({
-            .model_id = model_id,
-            .texture_id = texture_id,
-            .position = {0, 0, 0},
-            .euler_degrees = {0, 0, 0},
-            .rotation = QuaternionIdentity(),
-            .scale = {1, 1, 1},
-            .tint = WHITE
+        SetTextureFilter((*textures_.get(texture_id)).get(), RL_TEXTURE_FILTER_POINT);
+
+        model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = textures_.get(texture_id)->get();
+
+        entities_.add({
+            .name = "Test 1",
+            .transform = {
+                .position = {0, 0, 0},
+                .euler_degrees = {0, 0, 0},
+                .rotation = QuaternionIdentity(),
+                .scale = {1, 1, 1},
+            },
+            .mesh = EntityMesh{
+                .model_id = model_id,
+                .texture_id = texture_id,
+            },
         });
 
-
-        scene_node_list_.push_back({
-            .name = "Test",
-            .type = Obj,
-            .id = obj_id
-        });
-
-        obj_id = obj_nodes_.add({
-            .model_id = model_id,
-            .texture_id = texture_id,
-            .position = {5, 0, 0},
-            .euler_degrees = {0, 0, 0},
-            .rotation = QuaternionIdentity(),
-            .scale = {1, 1, 1},
-            .tint = WHITE
-        });
-
-        scene_node_list_.push_back({
-            .name = "Test 2",
-            .type = Obj,
-            .id = obj_id
+        entities_.add({
+            .name = "Test 1",
+            .transform = {
+                .position = {0, 0, 0},
+                .euler_degrees = {0, 0, 0},
+                .rotation = QuaternionIdentity(),
+                .scale = {1, 1, 1},
+            },
+            .mesh = EntityMesh{
+                .model_id = model_id,
+                .texture_id = texture_id,
+            },
         });
     }
 
@@ -131,24 +136,24 @@ namespace regan::editor {
         std::optional<size_t> hit_index;
         float closest = FLT_MAX;
 
-        for (size_t i = 0; i < scene_node_list_.size(); i++) {
-            auto& scene_node = scene_node_list_[i];
-            ObjNode* node = obj_nodes_.get(scene_node.id);
-            if (!node) continue;
+        for (auto& [id, entity] : entities_) {
+            if (!entity.mesh.has_value() || !entity.mesh.value().model_id.has_value()) {
+                continue;
+            }
+            auto* managed_model = models_.get(entity.mesh.value().model_id.value());
+            if (!managed_model) continue;
 
-            Model* model = models_.get(node->model_id);
-            if (!model) continue;
+            const auto transform = entity_transform_matrix(entity.transform);
 
-            auto transform = node_transform(*node);
-
-            RayCollision hit = GetRayCollisionMesh(ray, model->meshes[0], transform);
+            const auto& model = managed_model->get();
+            RayCollision hit = GetRayCollisionMesh(ray, model.meshes[0], transform);
             if (hit.hit && hit.distance < closest) {
                 closest = hit.distance;
-                hit_index = i;
+                hit_index = id;
             }
-        }
 
-        selected_ = hit_index;  // nullopt if nothing hit — clicking empty space deselects
+            selected_ = hit_index;  // nullopt if nothing hit — clicking empty space deselects
+        }
     }
 
     void Editor::update() {
@@ -170,15 +175,20 @@ namespace regan::editor {
     void Editor::draw_selection_highlight() {
         if (!selected_.has_value()) return;
 
-        auto& scene_node = scene_node_list_[selected_.value()];
-        auto* obj = obj_nodes_.get(scene_node.id);
-        if (!obj) return;
+        auto entity = entities_.get(selected_.value());
+        if (entity == nullptr) {
+            return;
+        }
 
-        Model* model = models_.get(obj->model_id);
+        if (!entity->mesh.has_value() || !entity->mesh.value().model_id.has_value()) {
+            return;
+        }
+
+        auto* model = models_.get(entity->mesh.value().model_id.value());
         if (!model) return;
 
-        BoundingBox box = GetModelBoundingBox(*model);
-        Matrix transform = node_transform(*obj);
+        BoundingBox box = GetModelBoundingBox(model->get());
+        Matrix transform = entity_transform_matrix(entity->transform);
 
         rlPushMatrix();
         rlMultMatrixf(MatrixToFloat(transform));
@@ -191,10 +201,12 @@ namespace regan::editor {
         ImGuizmo::BeginFrame();
         ImGuizmo::SetRect(0, 0, GetScreenWidth(), GetScreenHeight());
         if (selected_.has_value()) {
-            auto& node = scene_node_list_[selected_.value()];
-            auto* obj = obj_nodes_.get(node.id);
+            auto entity = entities_.get(selected_.value());
+            if (entity == nullptr) {
+                return;
+            }
 
-            auto transform = node_transform(*obj);
+            auto transform = entity_transform_matrix(entity->transform);
 
             Matrix view =  GetCameraMatrix(camera_3d_);
             Matrix projection = MatrixPerspective(
@@ -227,49 +239,41 @@ namespace regan::editor {
                 // apply delta to current quaternion
                 Quaternion delta_q = QuaternionFromMatrix(delta);
                 delta_q = QuaternionInvert(delta_q);
-                obj->rotation = QuaternionNormalize(QuaternionMultiply(delta_q,obj->rotation));
+                entity->transform.rotation = QuaternionNormalize(QuaternionMultiply(delta_q,entity->transform.rotation));
 
                 // update euler for display
-                Vector3 e = QuaternionToEuler(obj->rotation);
-                obj->euler_degrees = {e.x * RAD2DEG, e.y * RAD2DEG, e.z * RAD2DEG};
+                Vector3 e = QuaternionToEuler(entity->transform.rotation);
+                entity->transform.euler_degrees = {e.x * RAD2DEG, e.y * RAD2DEG, e.z * RAD2DEG};
 
                 // position and scale still from decompose
                 float t[3], r[3], s[3];
                 ImGuizmo::DecomposeMatrixToComponents(transform_f, t, r, s);
-                obj->position = {t[0], t[1], t[2]};
-                obj->scale    = {s[0], s[1], s[2]};
+                entity->transform.position = {t[0], t[1], t[2]};
+                entity->transform.scale    = {s[0], s[1], s[2]};
             }
         }
     }
 
     void Editor::draw_grid() {
-        for (int x = -10; x <= 10; x++) {
-            DrawLine3D(
-                {x * 2.56f, 0.0f, -10 * 2.56f},
-                {x * 2.56f, 0.0f, 10 * 2.56f},
-                {80, 80, 80, 255}
-            );
-        }
-        for (int z = -10; z <= 10; z++) {
-            DrawLine3D(
-                {-10 * 2.56f, 0.0f, z * 2.56f},
-                {10 * 2.56f, 0.0f, z * 2.56f},
-                {80, 80, 80, 255}
-            );
-        }
-
+        DrawGrid(100, 1);
         DrawLine3D({0, 0, 0}, {1, 0, 0}, RED);
         DrawLine3D({0, 0, 0}, {0, 1, 0}, GREEN);
         DrawLine3D({0, 0, 0}, {0, 0, 1}, BLUE);
     }
 
-    void Editor::draw_nodes() {
-        for (const auto &node: obj_nodes_ | std::views::values) {
-            auto* model = models_.get(node.model_id);
-            auto transform = node_transform(node);
+    void Editor::draw_entities() {
+        for (const auto &entity : entities_ | std::views::values) {
+            if (entity.mesh.has_value()) {
+                auto* model = models_.get(entity.mesh.value().model_id.value());
+                if (model != nullptr) {
+                    auto transform = entity_transform_matrix(entity.transform);
 
-            model->transform = transform;
-            DrawModel(*model, {0, 0, 0}, 1.0, node.tint);
+                    rlPushMatrix();
+                    rlMultMatrixf(MatrixToFloat(transform));
+                    DrawModel(model->get(), {0, 0, 0}, 1.0, WHITE);
+                    rlPopMatrix();
+                }
+            }
         }
     }
 
@@ -279,7 +283,7 @@ namespace regan::editor {
         BeginMode3D(camera_3d_);
 
         draw_grid();
-        draw_nodes();
+        draw_entities();
         draw_selection_highlight();
 
         EndMode3D();
@@ -288,7 +292,7 @@ namespace regan::editor {
 
         draw_menu_bar();
         draw_outliner_panel();
-        draw_node_properties();
+        gui_draw_entity_properties();
         draw_gizmo();
 
         rlImGuiEnd();
@@ -379,22 +383,22 @@ namespace regan::editor {
         ImGui::Begin("Outline");
 
         if (ImGui::BeginListBox("##outliner", ImVec2(-1, -1))) {
-
-            for (size_t index = 0; index < scene_node_list_.size(); index++) {
-                ImGui::PushID(static_cast<int>(index));
-                bool current_selection = selected_.has_value() && selected_.value() == index;
-                if (ImGui::Selectable(scene_node_list_[index].name.c_str(), current_selection)) {
-                    selected_ = index;
+            for (auto& [id, entity] : entities_) {
+                ImGui::PushID(static_cast<int>(id));
+                bool current_selection = selected_.has_value() && selected_.value() == id;
+                if (ImGui::Selectable(entity.name.c_str(), current_selection)) {
+                    selected_ = id;
                 }
                 ImGui::PopID();
             }
+
             ImGui::EndListBox();
         }
 
         ImGui::End();
     }
 
-    void Editor::draw_node_properties() {
+    void Editor::gui_draw_entity_properties() {
         ImVec2 screen = ImGui::GetIO().DisplaySize;
         float panel_width = 300.0f;
 
@@ -402,43 +406,34 @@ namespace regan::editor {
         ImGui::SetNextWindowPos(ImVec2(screen.x - panel_width, 20), ImGuiCond_FirstUseEver);
         ImGui::Begin("Node Properties");
 
-        if (!selected_.has_value() || scene_node_list_.empty()) {
+        if (!selected_.has_value() || entities_.empty()) {
             ImGui::End();
             return;
         }
 
-        switch (scene_node_list_[selected_.value()].type) {
-            case Obj:
-                draw_obj_node();
-                break;
-        }
+        const auto entity = entities_.get(selected_.value());
+        gui_draw_entity_transform_properties(*entity);
 
         ImGui::End();
     }
 
-    void Editor::draw_obj_node() {
-        if (!selected_.has_value() || scene_node_list_[selected_.value()].type != Obj) {
+    void Editor::gui_draw_entity_transform_properties(Entity& entity) {
+        if (!selected_.has_value()) {
             return;
         }
 
-        auto scene_node = scene_node_list_[selected_.value()];
-
-        ObjNode* node = obj_nodes_.get(scene_node.id);
-        if (node == nullptr) {
-            return;
-        }
-
+        EntityTransform& t = entity.transform;
         ImGui::BeginGroup();
-        ImGui::DragFloat3("Position", reinterpret_cast<float*>(&node->position), 0.1);
-        if (ImGui::DragFloat3("Rotation", &node->euler_degrees.x, 0.1)) {
-            node->rotation = QuaternionFromEuler(
-                node->euler_degrees.x * DEG2RAD,
-                node->euler_degrees.y * DEG2RAD,
-                node->euler_degrees.z * DEG2RAD
+        ImGui::DragFloat3("Position", reinterpret_cast<float*>(&t.position), 0.1);
+        if (ImGui::DragFloat3("Rotation", &t.euler_degrees.x, 0.1)) {
+            t.rotation = QuaternionFromEuler(
+                t.euler_degrees.x * DEG2RAD,
+                t.euler_degrees.y * DEG2RAD,
+                t.euler_degrees.z * DEG2RAD
             );
         };
 
-        ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&node->scale), 0.1, 0);
+        ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&t.scale), 0.1, 0);
         ImGui::EndGroup();
     }
 } // namespace regan

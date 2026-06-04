@@ -8,6 +8,7 @@
 namespace regan::common {
     class ManagedTexture2d {
     public:
+        ManagedTexture2d() = default;
         explicit ManagedTexture2d(Texture2D texture): texture_(texture) {}
         ~ManagedTexture2d() { UnloadTexture(texture_); }
 
@@ -30,6 +31,12 @@ namespace regan::common {
 
         Texture2D& get() { return texture_; }
         [[nodiscard]] const Texture2D& get() const { return texture_; }
+
+        static ManagedTexture2d take(Texture2D& texture) {
+            ManagedTexture2d tex(texture);
+            texture={};
+            return tex;
+        }
 
     private:
         Texture2D texture_;
