@@ -68,6 +68,8 @@ namespace regan::editor {
 
         void gui_draw_add_model_popup();
 
+        void duplicate_entity(size_t id);
+
         void populate_file_picker(const std::filesystem::path &dir, const std::vector<std::string> &extensions);
 
         void gui_draw_file_picker();

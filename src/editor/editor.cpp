@@ -452,6 +452,7 @@ namespace regan::editor {
 
         if (ImGui::BeginListBox("##outliner", ImVec2(-1, -1))) {
             std::optional<size_t> to_remove;
+            std::optional<size_t> to_duplicate;
 
             for (auto &[id, entity]: entities_) {
                 ImGui::PushID(static_cast<int>(id));
@@ -464,6 +465,9 @@ namespace regan::editor {
                     if (ImGui::MenuItem("Delete")) {
                         to_remove = id;
                     }
+                    if (ImGui::MenuItem("Duplicate")) {
+                        to_duplicate = id;
+                    }
                     ImGui::EndPopup();
                 }
                 ImGui::PopID();
@@ -471,6 +475,10 @@ namespace regan::editor {
 
             if (to_remove.has_value()) {
                 remove_entity(to_remove.value());
+            }
+
+            if (to_duplicate.has_value()) {
+                duplicate_entity(to_duplicate.value());
             }
 
             ImGui::EndListBox();
@@ -693,5 +701,17 @@ namespace regan::editor {
             }
             ImGui::EndPopup();
         }
+    }
+
+    void Editor::duplicate_entity(size_t id) {
+        auto *src = entities_.get(id);
+        if (!src) return;
+
+        Entity copy = *src;
+        copy.name += " (copy)";
+        copy.transform.position.x += 1.0f;
+
+        history_.execute(std::make_unique<commands::AddEntityCommand>(
+            entities_, std::move(copy)));
     }
 } // namespace regan
