@@ -18,7 +18,6 @@ namespace regan::editor {
     struct EntityLight {
         Vector3 color = {1.0f, 1.0f, 1.0f};
         float   intensity = 1.0f;
-        Vector3 half_extents = {2.5f, 2.5f, 2.5f};  // per-axis range, world units
     };
 
     struct EntityTransform {

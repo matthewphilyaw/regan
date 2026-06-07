@@ -30,6 +30,14 @@ namespace regan::editor {
         };
     }
 
+    inline Vector3 light_half_extents(const Entity& e) {
+        return {
+            0.5f * e.transform.scale.x,
+            0.5f * e.transform.scale.y,
+            0.5f * e.transform.scale.z
+        };
+    }
+
     static Matrix entity_transform_matrix(const EntityTransform& t) {
         return MatrixMultiply(
             MatrixMultiply(
@@ -124,20 +132,21 @@ namespace regan::editor {
             },
         });
 
-        entities_.add({
-            .name = "Test Light",
-            .transform = {
-                .position = {0, 2, 0},
-                .euler_degrees = {0, 0, 0},
-                .rotation = QuaternionIdentity(),
-                .scale = {1, 1, 1},
-            },
-            .light = EntityLight{
-                .color = {1.0f, 0.9f, 0.8f},
-                .intensity = 2.0f,
-                .half_extents = {5.0f, 3.0f, 5.0f},
-            },
-        });
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                entities_.add({
+                    .name = TextFormat("Light %d_%d", x, z),
+                    .transform = {
+                        .position = { x * 6.0f, 2.0f, z * 6.0f },
+                        .scale = { 5, 4, 5 },
+                    },
+                    .light = EntityLight{
+                        .color = { 1.0f, 0.9f, 0.8f },
+                        .intensity = 2.0f,
+                    },
+                });
+            }
+        }
     }
 
     Editor::~Editor() {
@@ -253,12 +262,7 @@ namespace regan::editor {
 
             const auto& l = entity.light.value();
             const Vector3 p = entity.transform.position;
-            const Vector3 s = entity.transform.scale;
-            const Vector3 h = {
-                l.half_extents.x * s.x,
-                l.half_extents.y * s.y,
-                l.half_extents.z * s.z
-            };
+            const auto [x, y, z] = light_half_extents(entity);
 
             // Color the wireframe to match the light, but dimmed
             Color box_color = {
@@ -269,8 +273,8 @@ namespace regan::editor {
             };
 
             BoundingBox box = {
-                { p.x - h.x, p.y - h.y, p.z - h.z },
-                { p.x + h.x, p.y + h.y, p.z + h.z }
+                { p.x - x, p.y - y, p.z - z },
+                { p.x + x, p.y + y, p.z + z }
             };
             DrawBoundingBox(box, box_color);
 
@@ -346,27 +350,28 @@ namespace regan::editor {
 
     void Editor::draw_entities() {
         light_system_.clear();
+        static Model ground = [] {
+            Model m = LoadModelFromMesh(GenMeshPlane(256.0f, 256.0f, 1, 1));
+            return m;
+        }();
+
+        Matrix ground_transform = MatrixTranslate(24.0f, 1.0f, 24.0f);
+
         for (const auto &entity : entities_ | std::views::values) {
             if (!entity.light.has_value()) continue;
 
             const auto& l = entity.light.value();
             const Vector3 p = entity.transform.position;
-            const Vector3 s = entity.transform.scale;
-            const Vector3 h = {
-                l.half_extents.x * s.x,
-                l.half_extents.y * s.y,
-                l.half_extents.z * s.z
-            };
+            const auto [x, y, z] = light_half_extents(entity);
 
             light_system_.add_point_light(
                 p, l.color, l.intensity,
-                { p.x - h.x, p.y - h.y, p.z - h.z },
-                { p.x + h.x, p.y + h.y, p.z + h.z }
+                { p.x - x, p.y - y, p.z - z },
+                { p.x + x, p.y + y, p.z + z }
             );
         }
 
         light_system_.upload();
-
 
         Vector3 ambient = { 0.15f, 0.15f, 0.15f };
         SetShaderValue(lighting_shader_, ambient_loc_, &ambient, SHADER_UNIFORM_VEC3);
@@ -385,10 +390,14 @@ namespace regan::editor {
             SetShaderValueMatrix(lighting_shader_, mat_model_loc_,  mat_model);
             SetShaderValueMatrix(lighting_shader_, mat_normal_loc_, mat_normal);
 
+            ground.materials[0].shader = lighting_shader_;
+            DrawMesh(ground.meshes[0], ground.materials[0], ground_transform);
+
             for (int m = 0; m < model->get().meshCount; m++) {
                 model->get().materials[m].shader = lighting_shader_;
                 DrawMesh(model->get().meshes[m], model->get().materials[m], mat_model);
             }
+
         }
     }
 
@@ -399,7 +408,7 @@ namespace regan::editor {
 
         draw_grid();
         draw_entities();
-        draw_light_gizmos();
+        //draw_light_gizmos();
         draw_selection_highlight();
 
         EndMode3D();
@@ -407,6 +416,7 @@ namespace regan::editor {
         rlImGuiBegin();
 
         gui_draw_menu_bar();
+        gui_draw_perf_overlay();
         gui_draw_outliner_panel();
         gui_draw_entity_properties();
         draw_gizmo();
@@ -530,6 +540,10 @@ namespace regan::editor {
         const auto entity = entities_.get(selected_.value());
         gui_draw_entity_transform_properties(*entity);
 
+        if (entity->light.has_value()) {
+            gui_draw_entity_light_properties(*entity);
+        }
+
         ImGui::End();
     }
 
@@ -551,5 +565,38 @@ namespace regan::editor {
 
         ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&t.scale), 0.1f, 0);
         ImGui::EndGroup();
+    }
+
+    void Editor::gui_draw_entity_light_properties(Entity& entity) {
+        if (!entity.light.has_value()) {
+            return;
+        }
+
+        EntityLight& l = entity.light.value();
+
+        ImGui::SeparatorText("Light");
+        ImGui::BeginGroup();
+
+        ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l.color));
+        ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
+        ImGui::EndGroup();
+    }
+
+    void Editor::gui_draw_perf_overlay() {
+        ImGui::SetNextWindowPos(ImVec2(10, 30), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Perf", nullptr,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+
+        float frame_ms = GetFrameTime() * 1000.0f;
+        ImGui::Text("%.2f ms (%.0f FPS)", frame_ms, 1000.0f / frame_ms);
+
+        static float history[120] = {};
+        static int idx = 0;
+        history[idx] = frame_ms;
+        idx = (idx + 1) % 120;
+        ImGui::PlotLines("##frametime", history, 120, idx,
+            nullptr, 0.0f, 33.0f, ImVec2(200, 50));
+
+        ImGui::End();
     }
 } // namespace regan

@@ -5,7 +5,7 @@
 int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(1280, 720, "Regan");
-    SetTargetFPS(60);
+    //SetTargetFPS(60);
     SetExitKey(KEY_NULL);
 
     {

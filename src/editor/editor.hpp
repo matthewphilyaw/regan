@@ -55,6 +55,11 @@ namespace regan::editor {
         void gui_draw_outliner_panel();
         void gui_draw_entity_properties();
         void gui_draw_entity_transform_properties(Entity &entity);
+
+        void gui_draw_entity_light_properties(Entity &entity);
+
+        void gui_draw_perf_overlay();
+
         void update_camera();
         void lock_cursor();
         void unlock_cursor();

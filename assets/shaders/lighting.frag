@@ -1,6 +1,6 @@
 #version 330
 
-#define MAX_LIGHTS 16
+#define MAX_LIGHTS 128
 
 in vec3 fragWorldPos;
 in vec3 fragNormal;

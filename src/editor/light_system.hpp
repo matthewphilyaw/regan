@@ -5,7 +5,7 @@
 
 namespace regan::editor {
 
-    static constexpr int MAX_LIGHTS = 16;
+    static constexpr int MAX_LIGHTS = 128;
 
     class LightSystem {
     public:
