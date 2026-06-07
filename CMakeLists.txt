@@ -3,6 +3,7 @@ project(regan)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(GRAPHICS GRAPHICS_API_OPENGL_43)
 
 include(FetchContent)
 
@@ -69,6 +70,8 @@ add_executable(regan
         src/editor/entity.hpp
         src/common/managed_model.hpp
         src/common/managed_texture_2d.hpp
+        src/editor/light_system.cpp
+        src/editor/light_system.hpp
 )
 
 target_include_directories(regan PRIVATE

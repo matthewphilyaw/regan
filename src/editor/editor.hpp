@@ -7,6 +7,7 @@
 #include "rlImGui.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
+#include "light_system.hpp"
 #include "registry.hpp"
 #include "common/managed_model.hpp"
 #include "common/managed_texture_2d.hpp"
@@ -18,6 +19,14 @@ namespace regan {
 
 namespace regan::editor {
     constexpr const char* ASSET_PATH = "/Users/mphilyaw/code/regan/assets";
+
+    struct UniformLocations {
+        int lightCount;
+        int ambient;
+        int edgeFade;
+        int matModel;
+        int matNormal;
+    };
 
     struct EditorCamera {
         Vector3 focal_point = {0.0f, 0.0f, 0.0f};
@@ -36,12 +45,14 @@ namespace regan::editor {
 
         void draw_selection_highlight();
 
+        void draw_light_gizmos();
+
         void draw();
         ~Editor();
 
     private:
-        void draw_menu_bar() const;
-        void draw_outliner_panel();
+        void gui_draw_menu_bar() const;
+        void gui_draw_outliner_panel();
         void gui_draw_entity_properties();
         void gui_draw_entity_transform_properties(Entity &entity);
         void update_camera();
@@ -66,5 +77,14 @@ namespace regan::editor {
         std::optional<size_t> selected_{};
         bool cursor_locked_ = false;
         ImGuizmo::OPERATION operation_ = ImGuizmo::TRANSLATE;
+        UniformLocations uniform_locs_{};
+
+        int mat_model_loc_  = -1;
+        int mat_normal_loc_ = -1;
+        int ambient_loc_    = -1;
+        int edge_fade_loc_ = -1;
+
+        Shader lighting_shader_{};
+        LightSystem light_system_;
     };
 }

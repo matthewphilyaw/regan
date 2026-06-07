@@ -1,7 +1,6 @@
 #include "editor.hpp"
 
 #include <cmath>
-#include <sys/_select.h>
 
 #include "imgui.h"
 #include "raylib.h"
@@ -18,9 +17,9 @@
 
 namespace fs = std::filesystem;
 
-fs::path asset_path = "/Users/mphilyaw/code/regan/assets";
 
 namespace regan::editor {
+    fs::path asset_path = "/Users/mphilyaw/code/regan/assets";
 
     static Matrix matrix_from_floats(const float f[16]) {
         return Matrix{
@@ -53,7 +52,12 @@ namespace regan::editor {
         camera.projection = CAMERA_PERSPECTIVE;
     }
 
-    Editor::Editor(Engine &engine) : engine_(engine) {
+    Editor::Editor(Engine &engine) : engine_(engine),
+                                     lighting_shader_(LoadShader(
+                                         (asset_path / "shaders" / "lighting.vert").c_str(),
+                                         (asset_path / "shaders" / "lighting.frag").c_str())),
+                                     light_system_(lighting_shader_) {
+        TraceLog(LOG_INFO, "Editor constructor start");
         EnableCursor();
         SetMouseCursor(MOUSE_CURSOR_CROSSHAIR);
         rlImGuiSetup(true);
@@ -64,6 +68,25 @@ namespace regan::editor {
             common::ManagedTexture2d(
                 LoadTexture((asset_path / "textures" / "office_kit.png").string().c_str())
             )
+        );
+
+        uniform_locs_.lightCount = GetShaderLocation(lighting_shader_, "lightCount");
+        uniform_locs_.ambient    = GetShaderLocation(lighting_shader_, "ambient");
+        uniform_locs_.edgeFade   = GetShaderLocation(lighting_shader_, "edgeFade");
+        uniform_locs_.matModel   = GetShaderLocation(lighting_shader_, "matModel");
+        uniform_locs_.matNormal  = GetShaderLocation(lighting_shader_, "matNormal");
+        mat_model_loc_  = GetShaderLocation(lighting_shader_, "matModel");
+        mat_normal_loc_ = GetShaderLocation(lighting_shader_, "matNormal");
+        ambient_loc_    = GetShaderLocation(lighting_shader_, "ambient");
+        edge_fade_loc_ = GetShaderLocation(lighting_shader_, "edgeFade");
+
+        // In init(), after light_system_ is constructed
+        light_system_.add_point_light(
+            { 0.0f, 2.0f, 0.0f },   // position — above origin
+            { 1.0f, 0.9f, 0.8f },   // warm white
+            2.0f,                     // intensity
+            {-3.0f, -1.0f, -3.0f },  // aabb min
+            { 3.0f,  3.0f,  3.0f }   // aabb max
         );
 
         auto* managed_model = models_.get(model_id);
@@ -100,6 +123,21 @@ namespace regan::editor {
                 .texture_id = texture_id,
             },
         });
+
+        entities_.add({
+            .name = "Test Light",
+            .transform = {
+                .position = {0, 2, 0},
+                .euler_degrees = {0, 0, 0},
+                .rotation = QuaternionIdentity(),
+                .scale = {1, 1, 1},
+            },
+            .light = EntityLight{
+                .color = {1.0f, 0.9f, 0.8f},
+                .intensity = 2.0f,
+                .half_extents = {5.0f, 3.0f, 5.0f},
+            },
+        });
     }
 
     Editor::~Editor() {
@@ -129,7 +167,7 @@ namespace regan::editor {
     void Editor::update_selection() {
         if (ImGui::GetIO().WantCaptureMouse) return;
         if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return;
-        if (ImGuizmo::IsOver()) return;  // don't deselect when grabbing the gizmo
+        if (ImGuizmo::IsUsing()) return;
 
         Ray ray = GetScreenToWorldRay(GetMousePosition(), camera_3d_);
 
@@ -137,9 +175,21 @@ namespace regan::editor {
         float closest = FLT_MAX;
 
         for (auto& [id, entity] : entities_) {
+
+            if (entity.light.has_value()) {
+                const Vector3 p = entity.transform.position;
+                RayCollision hit = GetRayCollisionSphere(ray, p, 0.4f);
+                if (hit.hit && hit.distance < closest) {
+                    closest = hit.distance;
+                    hit_index = id;
+                }
+                continue;
+            }
+
             if (!entity.mesh.has_value() || !entity.mesh.value().model_id.has_value()) {
                 continue;
             }
+
             auto* managed_model = models_.get(entity.mesh.value().model_id.value());
             if (!managed_model) continue;
 
@@ -152,8 +202,9 @@ namespace regan::editor {
                 hit_index = id;
             }
 
-            selected_ = hit_index;  // nullopt if nothing hit — clicking empty space deselects
         }
+
+        selected_ = hit_index;
     }
 
     void Editor::update() {
@@ -194,6 +245,38 @@ namespace regan::editor {
         rlMultMatrixf(MatrixToFloat(transform));
         DrawBoundingBox(box, MAGENTA);
         rlPopMatrix();
+    }
+
+    void Editor::draw_light_gizmos() {
+        for (const auto &entity : entities_ | std::views::values) {
+            if (!entity.light.has_value()) continue;
+
+            const auto& l = entity.light.value();
+            const Vector3 p = entity.transform.position;
+            const Vector3 s = entity.transform.scale;
+            const Vector3 h = {
+                l.half_extents.x * s.x,
+                l.half_extents.y * s.y,
+                l.half_extents.z * s.z
+            };
+
+            // Color the wireframe to match the light, but dimmed
+            Color box_color = {
+                (unsigned char)(l.color.x * 255),
+                (unsigned char)(l.color.y * 255),
+                (unsigned char)(l.color.z * 255),
+                128
+            };
+
+            BoundingBox box = {
+                { p.x - h.x, p.y - h.y, p.z - h.z },
+                { p.x + h.x, p.y + h.y, p.z + h.z }
+            };
+            DrawBoundingBox(box, box_color);
+
+            // Center marker — small sphere at the light source
+            DrawSphere(p, 0.4f, box_color);
+        }
     }
 
     void Editor::draw_gizmo() {
@@ -262,17 +345,49 @@ namespace regan::editor {
     }
 
     void Editor::draw_entities() {
+        light_system_.clear();
         for (const auto &entity : entities_ | std::views::values) {
-            if (entity.mesh.has_value()) {
-                auto* model = models_.get(entity.mesh.value().model_id.value());
-                if (model != nullptr) {
-                    auto transform = entity_transform_matrix(entity.transform);
+            if (!entity.light.has_value()) continue;
 
-                    rlPushMatrix();
-                    rlMultMatrixf(MatrixToFloat(transform));
-                    DrawModel(model->get(), {0, 0, 0}, 1.0, WHITE);
-                    rlPopMatrix();
-                }
+            const auto& l = entity.light.value();
+            const Vector3 p = entity.transform.position;
+            const Vector3 s = entity.transform.scale;
+            const Vector3 h = {
+                l.half_extents.x * s.x,
+                l.half_extents.y * s.y,
+                l.half_extents.z * s.z
+            };
+
+            light_system_.add_point_light(
+                p, l.color, l.intensity,
+                { p.x - h.x, p.y - h.y, p.z - h.z },
+                { p.x + h.x, p.y + h.y, p.z + h.z }
+            );
+        }
+
+        light_system_.upload();
+
+
+        Vector3 ambient = { 0.15f, 0.15f, 0.15f };
+        SetShaderValue(lighting_shader_, ambient_loc_, &ambient, SHADER_UNIFORM_VEC3);
+        float edge_fade = 0.5f;
+        SetShaderValue(lighting_shader_, edge_fade_loc_, &edge_fade, SHADER_UNIFORM_FLOAT);
+
+        for (const auto &entity : entities_ | std::views::values) {
+            if (!entity.mesh.has_value()) continue;
+
+            auto* model = models_.get(entity.mesh.value().model_id.value());
+            if (model == nullptr) continue;
+
+            Matrix mat_model  = entity_transform_matrix(entity.transform);
+            Matrix mat_normal = MatrixTranspose(MatrixInvert(mat_model));
+
+            SetShaderValueMatrix(lighting_shader_, mat_model_loc_,  mat_model);
+            SetShaderValueMatrix(lighting_shader_, mat_normal_loc_, mat_normal);
+
+            for (int m = 0; m < model->get().meshCount; m++) {
+                model->get().materials[m].shader = lighting_shader_;
+                DrawMesh(model->get().meshes[m], model->get().materials[m], mat_model);
             }
         }
     }
@@ -284,14 +399,15 @@ namespace regan::editor {
 
         draw_grid();
         draw_entities();
+        draw_light_gizmos();
         draw_selection_highlight();
 
         EndMode3D();
 
         rlImGuiBegin();
 
-        draw_menu_bar();
-        draw_outliner_panel();
+        gui_draw_menu_bar();
+        gui_draw_outliner_panel();
         gui_draw_entity_properties();
         draw_gizmo();
 
@@ -365,7 +481,7 @@ namespace regan::editor {
         }
     }
 
-    void Editor::draw_menu_bar() const {
+    void Editor::gui_draw_menu_bar() const {
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
                 if (ImGui::MenuItem("Exit to Menu")) {
@@ -377,7 +493,7 @@ namespace regan::editor {
         }
     }
 
-    void Editor::draw_outliner_panel() {
+    void Editor::gui_draw_outliner_panel() {
         ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowPos(ImVec2(0, 20), ImGuiCond_FirstUseEver);
         ImGui::Begin("Outline");
@@ -424,8 +540,8 @@ namespace regan::editor {
 
         EntityTransform& t = entity.transform;
         ImGui::BeginGroup();
-        ImGui::DragFloat3("Position", reinterpret_cast<float*>(&t.position), 0.1);
-        if (ImGui::DragFloat3("Rotation", &t.euler_degrees.x, 0.1)) {
+        ImGui::DragFloat3("Position", reinterpret_cast<float*>(&t.position), 0.1f);
+        if (ImGui::DragFloat3("Rotation", &t.euler_degrees.x, 0.1f)) {
             t.rotation = QuaternionFromEuler(
                 t.euler_degrees.x * DEG2RAD,
                 t.euler_degrees.y * DEG2RAD,
@@ -433,7 +549,7 @@ namespace regan::editor {
             );
         };
 
-        ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&t.scale), 0.1, 0);
+        ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&t.scale), 0.1f, 0);
         ImGui::EndGroup();
     }
 } // namespace regan
