@@ -85,6 +85,8 @@ add_executable(regan
         src/editor/command.hpp
         src/editor/commands/add_entity_command.hpp
         src/editor/commands/remove_entity_command.hpp
+        src/editor/commands/change_texture_command.hpp
+        src/editor/commands/change_model_command.hpp
 )
 
 target_include_directories(regan PRIVATE

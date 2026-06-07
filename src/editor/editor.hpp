@@ -70,6 +70,14 @@ namespace regan::editor {
 
         void duplicate_entity(size_t id);
 
+        void gui_draw_change_model_dialog();
+
+        void gui_draw_change_texture_dialog();
+
+        void change_entity_model(size_t entity_id, const std::string &path);
+
+        void change_entity_texture(size_t entity_id, const std::string &path);
+
         void populate_file_picker(const std::filesystem::path &dir, const std::vector<std::string> &extensions);
 
         void gui_draw_file_picker();
@@ -86,6 +94,10 @@ namespace regan::editor {
         bool show_add_model_popup_ = false;
         std::string pending_model_path_;
         std::string pending_texture_path_;
+
+        bool show_change_model_dialog_ = false;
+        bool show_change_texture_dialog_ = false;
+        size_t pending_swap_entity_id_ = 0;
 
         Engine &engine_;
         Camera3D camera_3d_{};

@@ -14,6 +14,8 @@
 #include "ImGuiFileDialog.h"
 #include "rlgl.h"
 #include "commands/add_entity_command.hpp"
+#include "commands/change_model_command.hpp"
+#include "commands/change_texture_command.hpp"
 #include "commands/remove_entity_command.hpp"
 #include "common/managed_model.hpp"
 #include "common/managed_texture_2d.hpp"
@@ -349,6 +351,8 @@ namespace regan::editor {
         gui_draw_outliner_panel();
         gui_draw_entity_properties();
         gui_draw_add_model_popup();
+        gui_draw_change_model_dialog();
+        gui_draw_change_texture_dialog();
         draw_gizmo();
 
         rlImGuiEnd();
@@ -510,6 +514,19 @@ namespace regan::editor {
 
         const auto entity = entities_.get(selected_.value());
         gui_draw_entity_transform_properties(*entity);
+
+        if (entity->mesh.has_value()) {
+            ImGui::SeparatorText("Mesh");
+            if (ImGui::Button("Change Model...")) {
+                pending_swap_entity_id_ = selected_.value();
+                show_change_model_dialog_ = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Change Texture...")) {
+                pending_swap_entity_id_ = selected_.value();
+                show_change_texture_dialog_ = true;
+            }
+        }
 
         if (entity->light.has_value()) {
             gui_draw_entity_light_properties(*entity);
@@ -713,5 +730,69 @@ namespace regan::editor {
 
         history_.execute(std::make_unique<commands::AddEntityCommand>(
             entities_, std::move(copy)));
+    }
+
+    // editor.cpp
+
+    void Editor::gui_draw_change_model_dialog() {
+        if (!show_change_model_dialog_) return;
+
+        if (!ImGuiFileDialog::Instance()->IsOpened("ChangeModel")) {
+            IGFD::FileDialogConfig cfg;
+            cfg.path = (asset_path / "kit").string();
+            ImGuiFileDialog::Instance()->OpenDialog(
+                "ChangeModel", "Change Model", ".glb,.gltf,.obj", cfg);
+        }
+
+        if (ImGuiFileDialog::Instance()->Display("ChangeModel")) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                std::string path = ImGuiFileDialog::Instance()->GetFilePathName();
+                change_entity_model(pending_swap_entity_id_, path);
+            }
+            ImGuiFileDialog::Instance()->Close();
+            show_change_model_dialog_ = false;
+        }
+    }
+
+    void Editor::gui_draw_change_texture_dialog() {
+        if (!show_change_texture_dialog_) return;
+
+        if (!ImGuiFileDialog::Instance()->IsOpened("ChangeTexture")) {
+            IGFD::FileDialogConfig cfg;
+            cfg.path = (asset_path / "textures").string();
+            ImGuiFileDialog::Instance()->OpenDialog(
+                "ChangeTexture", "Change Texture", ".png,.jpg,.jpeg", cfg);
+        }
+
+        if (ImGuiFileDialog::Instance()->Display("ChangeTexture")) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                std::string path = ImGuiFileDialog::Instance()->GetFilePathName();
+                change_entity_texture(pending_swap_entity_id_, path);
+            }
+            ImGuiFileDialog::Instance()->Close();
+            show_change_texture_dialog_ = false;
+        }
+    }
+
+    void Editor::change_entity_model(size_t entity_id, const std::string &path) {
+        auto *e = entities_.get(entity_id);
+        if (!e || !e->mesh || !e->mesh->model_id) return;
+
+        size_t old_id = e->mesh->model_id.value();
+        size_t new_id = models_.add(common::ManagedModel(LoadModel(path.c_str())));
+
+        history_.execute(std::make_unique<commands::ChangeModelCommand>(
+            entities_, models_, textures_, entity_id, old_id, new_id));
+    }
+
+    void Editor::change_entity_texture(size_t entity_id, const std::string &path) {
+        auto *e = entities_.get(entity_id);
+        if (!e || !e->mesh || !e->mesh->texture_id) return;
+
+        size_t old_id = e->mesh->texture_id.value();
+        size_t new_id = textures_.add(common::ManagedTexture2d(LoadTexture(path.c_str())));
+
+        history_.execute(std::make_unique<commands::ChangeTextureCommand>(
+            entities_, models_, textures_, entity_id, old_id, new_id));
     }
 } // namespace regan
