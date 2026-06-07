@@ -1,8 +1,10 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
+#include "command.hpp"
 #include "entity.hpp"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -43,32 +45,45 @@ namespace regan::editor {
         explicit Editor(regan::Engine &engine);
         void update();
 
-        void draw_selection_highlight();
-
-        void draw_light_gizmos();
-
         void draw();
         ~Editor();
 
     private:
-        void gui_draw_menu_bar() const;
-        void gui_draw_outliner_panel();
-        void gui_draw_entity_properties();
-        void gui_draw_entity_transform_properties(Entity &entity);
-
-        void gui_draw_entity_light_properties(Entity &entity);
-
-        void gui_draw_perf_overlay();
-
-        void update_camera();
         void lock_cursor();
         void unlock_cursor();
 
+        void gui_draw_menu_bar();
+        void gui_draw_outliner_panel();
+        void gui_draw_entity_properties();
+        void gui_draw_entity_transform_properties(Entity &entity);
+        void gui_draw_entity_light_properties(Entity &entity);
+        void gui_draw_perf_overlay();
+
+        void add_light_entity();
+        void add_model_entity(std::string model_path, std::string texture_path);
+
+        void remove_entity(size_t id);
+
+        void update_shortcuts();
+
+        void gui_draw_add_model_popup();
+
+        void populate_file_picker(const std::filesystem::path &dir, const std::vector<std::string> &extensions);
+
+        void gui_draw_file_picker();
+
+        void update_camera();
         void update_selection();
 
         void draw_gizmo();
         void draw_grid();
         void draw_entities();
+        void draw_selection_highlight();
+        void draw_light_gizmos();
+
+        bool show_add_model_popup_ = false;
+        std::string pending_model_path_;
+        std::string pending_texture_path_;
 
         Engine &engine_;
         Camera3D camera_3d_{};
@@ -91,5 +106,6 @@ namespace regan::editor {
 
         Shader lighting_shader_{};
         LightSystem light_system_;
+        CommandHistory history_{};
     };
 }

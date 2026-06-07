@@ -15,6 +15,11 @@ namespace regan::editor {
             return id;
         }
 
+        void insert(size_t id, T item) {
+            registry_[id] = std::move(item);
+            if (id > last_id_) last_id_ = id;  // keep counter ahead of restored ids
+        }
+
         T* get(size_t id) {
             auto it = registry_.find(id);
             if (it == registry_.end()) {
@@ -36,6 +41,8 @@ namespace regan::editor {
             return registry_.empty();
         }
 
+        auto begin() { return registry_.begin(); }
+        auto end()   { return registry_.end(); }
         auto begin() const { return registry_.begin(); }
         auto end()   const { return registry_.end(); }
 

@@ -48,6 +48,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imguizmo)
 
+# ImGuiFileDialog
+FetchContent_Declare(
+        imguifiledialog
+        GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+        GIT_TAG        v0.6.8
+        GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(imguifiledialog)
+
 add_executable(regan
         src/main.cpp
 
@@ -59,6 +68,7 @@ add_executable(regan
         ${imgui_SOURCE_DIR}/imgui_demo.cpp
         ${rlimgui_SOURCE_DIR}/rlImGui.cpp
         ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
+        ${imguifiledialog_SOURCE_DIR}/ImGuiFileDialog.cpp
         src/editor/editor.hpp
         src/editor/editor.cpp
         src/editor/editor.hpp
@@ -72,6 +82,9 @@ add_executable(regan
         src/common/managed_texture_2d.hpp
         src/editor/light_system.cpp
         src/editor/light_system.hpp
+        src/editor/command.hpp
+        src/editor/commands/add_entity_command.hpp
+        src/editor/commands/remove_entity_command.hpp
 )
 
 target_include_directories(regan PRIVATE
@@ -80,6 +93,7 @@ target_include_directories(regan PRIVATE
         ${imgui_SOURCE_DIR}/backends
         ${rlimgui_SOURCE_DIR}
         ${imguizmo_SOURCE_DIR}/src
+        ${imguifiledialog_SOURCE_DIR}
 )
 
 target_link_libraries(regan PRIVATE raylib)
